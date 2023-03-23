@@ -1,67 +1,56 @@
+mod get_query_plan;
 use chrono::prelude::*;
-use regex::Regex;
+use clap::Parser;
+use get_query_plan::*;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json as sjson;
 use std::error::Error;
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::io::Read;
+use std::process::Command;
 use std::result::Result as StdResult;
-use std::str::FromStr;
 use std::{env, io};
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+/// CLI frontend for explain.dalibo.com, a PostgreSQL execution plan visualizer
+///
+/// Usage: pbpaste | pg_vizurl
+/// Not affiliated with Dalibo!
+struct Args {
+    #[clap(short, long)]
+    /// Title of query, defaults to $USER and timestamp
+    title: Option<String>,
+
+    #[clap(short, long, env = "DATABASE_URL")]
+    /// Defaults to $DATABASE_URL
+    database_url: String,
+
+    #[clap(short, long, default_value_t = String::from("https://explain.dalibo.com/new.json"))]
+    url: String,
+}
+
 fn main() -> StdResult<(), Box<dyn Error + 'static>> {
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set");
+    let args = Args::parse();
 
     let mut query = String::new();
-    io::stdin()
-        .read_to_string(&mut query)
-        .expect("Failed to read input");
+    io::stdin().read_to_string(&mut query).unwrap();
 
-    // Check if input matches regex
-    let select_regex = Regex::new(r#"^select\s"#).unwrap();
-    if !select_regex.is_match(&query) {
-        eprintln!("Input must begin with SELECT'");
-        std::process::exit(1);
-    }
-
-    let explain_query = format!(
-        "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) {}",
-        query
-    );
-
-    let mut child = Command::new("psql")
-        .arg("--no-psqlrc")
-        .arg("--quiet")
-        .arg("--no-align")
-        .arg("--tuples-only")
-        .arg(database_url)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    child
-        .stdin
-        .as_mut()
-        .unwrap()
-        .write_all(explain_query.as_bytes())?;
-
-    let output = child.wait_with_output()?.stdout;
+    let title = match args.title {
+        Some(str) => str,
+        None => current_time_and_user(),
+    };
 
     let params = [
-        ("plan", String::from_utf8(output)?),
+        ("plan", get_query_plan(&query, &args.database_url)?),
         ("query", query),
-        ("title", get_current_time_and_user()),
+        ("title", title),
     ];
 
     let client = Client::new();
-    let response = client
-        .post("https://explain.dalibo.com/new.json")
-        .form(&params)
-        .send()?;
+    let response = client.post(args.url).form(&params).send()?;
 
     if response.status().is_success() {
-        // Get the response body as text
         let body = response.text()?;
         let parsed_response: DaliboResult = sjson::from_str(&body)?;
         parsed_response.open();
@@ -72,7 +61,7 @@ fn main() -> StdResult<(), Box<dyn Error + 'static>> {
     Ok(())
 }
 
-fn get_current_time_and_user() -> String {
+fn current_time_and_user() -> String {
     let now = Local::now();
     let username = env::var("USER").unwrap_or_else(|_| "unknown".to_string());
     format!("{username} {}", now.format("%Y-%m-%d %H:%M:%S"))
