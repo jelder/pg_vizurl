@@ -3,6 +3,7 @@ name = "pg_vizurl"
 version = "0.1.1"
 edition = "2021"
 authors = ["Jacob Elder"]
+homepage = "https://www.jacobelder.com"
 categories = ["database", "command-line-utilities"]
 description = "CLI frontend for explain.dalibo.com"
 keywords = ["postgresql"]
