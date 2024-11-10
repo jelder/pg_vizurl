@@ -10,15 +10,14 @@ pbpaste | pg_vizurl
 
 ## Installation
 
-Homebrew:
+### Install prebuilt binaries via shell script
 
-```
-brew tap jelder/homebrew-tap
-brew install pg_vizurl
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/jelder/pg_vizurl/releases/download/v0.1.1/pg_vizurl-installer.sh | sh
 ```
 
-Cargo:
+### Install prebuilt binaries via Homebrew
 
-```
-cargo binstall pg_vizurl
+```sh
+brew install jelder/tap/pg_vizurl
 ```
